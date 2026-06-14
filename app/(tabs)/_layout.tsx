@@ -54,15 +54,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="insights"
-        options={{
-          title: 'Insights',
-          tabBarIcon: ({ color, size }: TabIconProps) => (
-            <BarChart2 size={size} color={color} strokeWidth={1.8} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="add"
         options={{
           title: 'Add',
@@ -76,7 +67,7 @@ export default function TabLayout() {
                 backgroundColor: colors.accent,
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: 4,
+                marginBottom: 25,
               }}
             >
               <PlusCircle size={22} color="#fff" strokeWidth={2} />
@@ -84,6 +75,16 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="insights"
+        options={{
+          title: 'Insights',
+          tabBarIcon: ({ color, size }: TabIconProps) => (
+            <BarChart2 size={size} color={color} strokeWidth={1.8} />
+          ),
+        }}
+      />
+      
       <Tabs.Screen
         name="goals"
         options={{
