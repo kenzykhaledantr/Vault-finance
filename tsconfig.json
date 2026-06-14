@@ -2,15 +2,43 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": [
-        "./*"
+        "./src/*"
+      ],
+      "@components/*": [
+        "./src/components/*"
+      ],
+      "@features/*": [
+        "./src/features/*"
+      ],
+      "@store/*": [
+        "./src/store/*"
+      ],
+      "@theme/*": [
+        "./src/theme/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@hooks/*": [
+        "./src/hooks/*"
+      ],
+      "@types/*": [
+        "./src/types/*"
       ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".expo/types/**/*.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]
