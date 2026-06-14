@@ -1,98 +1,139 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, RefreshControl } from 'react-native';
+import { useState, useCallback, useMemo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
+import { ShieldCheck, Bell } from 'lucide-react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { useTheme } from '@hooks/useTheme';
+import { useAuthStore } from '@store/authStore';
+import {
+  useTransactionSummary,
+  useTransactions,
+  transactionKeys,
+} from '@features/transactions/hooks/useTransactions';
+import { useBudgetSummary } from '../../src/features/budgets/hooks/useBudgets';
+import { getCurrentMonthRange } from '@utils/date';
 
-export default function HomeScreen() {
+import { BalanceCard } from '@components/dashboard/BalanceCard';
+import { MonthlySpending } from '@components/dashboard/MonthlySpending';
+import { RecentActivity } from '@components/dashboard/RecentActivity';
+
+export default function DashboardScreen() {
+  const { colors, typography, spacing } = useTheme();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Compute date range once per render — memoized so it doesn't
+  // create a new object reference every render (which would bust query cache)
+  const { start, end } = useMemo(() => getCurrentMonthRange(), []);
+
+  // Three independent queries — React Query fires these in parallel
+  const { data: summary, isLoading: summaryLoading } = useTransactionSummary(start, end);
+  const { data: recentTransactions = [], isLoading: transactionsLoading } = useTransactions({
+    limit: 5,
+  });
+  const { data: budgetTotal } = useBudgetSummary();
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    // Invalidate everything — pulls fresh data from SQLite
+    await queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    setIsRefreshing(false);
+  }, [queryClient]);
+
+  const balance = summary ? summary.totalIncome - summary.totalExpenses : 0;
+  const spent = summary?.totalExpenses ?? 0;
+  const budget = budgetTotal ?? 320000; // $3,200 fallback matches design
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xxxl },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+          />
+        }
+      >
+        {/* Header */}
+        <View style={[styles.header, { marginBottom: spacing.lg }]}>
+          <View style={styles.headerLeft}>
+            <View
+              style={[
+                styles.avatar,
+                { backgroundColor: colors.accentSubtle },
+              ]}
+            >
+              <ShieldCheck size={18} color={colors.accent} />
+            </View>
+            <View>
+              <Text style={[styles.greeting, { color: colors.textMuted, fontSize: typography.xs }]}>
+                Welcome back
+              </Text>
+              <Text style={[styles.appName, { color: colors.text, fontSize: typography.md }]}>
+                {user?.name ?? 'Vault'}
+              </Text>
+            </View>
+          </View>
+          <View
+            style={[
+              styles.iconButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Bell size={18} color={colors.text} strokeWidth={1.8} />
+          </View>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {/* Balance card */}
+        <View style={{ marginBottom: spacing.lg }}>
+          <BalanceCard balance={balance} changePercent={summaryLoading ? undefined : 2.4} />
+        </View>
+
+        {/* Monthly spending */}
+        <View style={{ marginBottom: spacing.lg }}>
+          <MonthlySpending spent={spent} budget={budget} />
+        </View>
+
+        {/* Recent activity */}
+        <RecentActivity transactions={recentTransactions} isLoading={transactionsLoading} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16 },
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  greeting: { fontWeight: '400', marginBottom: 1 },
+  appName: { fontWeight: '600' },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
