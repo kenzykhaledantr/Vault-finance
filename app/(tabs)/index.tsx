@@ -1,8 +1,8 @@
-import { View, ScrollView, StyleSheet, Text, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, RefreshControl, TouchableOpacity } from 'react-native';
 import { useState, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, Bell } from 'lucide-react-native';
+import { ShieldCheck, Bell, Download, LogOut } from 'lucide-react-native';
 
 import { useTheme } from '@hooks/useTheme';
 import { useAuthStore } from '@store/authStore';
@@ -17,6 +17,12 @@ import { getCurrentMonthRange } from '@utils/date';
 import { BalanceCard } from '@components/dashboard/BalanceCard';
 import { MonthlySpending } from '@components/dashboard/MonthlySpending';
 import { RecentActivity } from '@components/dashboard/RecentActivity';
+
+import { useSync } from '@hooks/useSync';
+import { exportService } from '../../src/services/export/exportService';
+import { SyncBadge } from '@components/ui/SyncBadge';
+import { Alert } from 'react-native';
+import { router } from 'expo-router';
 
 export default function DashboardScreen() {
   const { colors, typography, spacing } = useTheme();
@@ -47,6 +53,89 @@ export default function DashboardScreen() {
   const spent = summary?.totalExpenses ?? 0;
   const budget = budgetTotal ?? 320000; // $3,200 fallback matches design
 
+  // const { sync, status: syncStatus, lastSynced } = useSync();
+
+const handleExport = useCallback(async () => {
+  Alert.alert(
+    'Export report',
+    'Choose export format',
+    [
+      {
+        text: 'CSV',
+        onPress: async () => {
+          try {
+            await exportService.exportCSV(user?.id ?? '', start, end);
+          } catch {
+            Alert.alert('Export failed', 'Could not export CSV.');
+          }
+        },
+      },
+      {
+        text: 'PDF',
+        onPress: async () => {
+          try {
+            await exportService.exportPDF(user?.id ?? '', start, end);
+          } catch {
+            Alert.alert('Export failed', 'Could not export PDF.');
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]
+  );
+}, [start, end]);
+  
+  const { clearUser } = useAuthStore();
+
+const handleLogout = useCallback(() => {
+  Alert.alert(
+    'Sign out',
+    'Are you sure you want to sign out of Vault?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          // Clear ALL cached query data before navigating away
+          queryClient.clear();
+          await clearUser();
+          router.replace('/(auth)/login');
+        },
+      },
+    ]
+  );
+}, [clearUser, queryClient]);
+  
+//   const handleDebugSync = async () => {
+//   try {
+//     // Step 1: Check env vars
+//     const Constants = (await import('expo-constants')).default;
+//     const url = Constants.expoConfig?.extra?.['supabaseUrl'];
+//     const key = Constants.expoConfig?.extra?.['supabaseAnonKey'];
+//     console.log('SUPABASE_URL:', url ?? 'MISSING');
+//     console.log('SUPABASE_KEY:', key ? `${String(key).slice(0, 20)}...` : 'MISSING');
+
+//     // Step 2: Check unsynced transactions in SQLite
+//     const { getDatabase } = await import('../../src/database');
+//     const db = getDatabase();
+//     const unsynced = await db.getAllAsync(
+//       'SELECT id, amount, type, synced_at FROM transactions LIMIT 10'
+//     );
+//     console.log('All transactions in SQLite:', JSON.stringify(unsynced, null, 2));
+
+//     // Step 3: Try a raw Supabase connection test
+//     const { supabase } = await import('../../src/services/supbase/supabaseClient');
+//     const { data, error } = await supabase.from('transactions').select('count').limit(1);
+//     console.log('Supabase connection test:', { data, error });
+
+//   } catch (e) {
+//     console.error('Debug error:', e);
+//   }
+// };
+
+
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -64,34 +153,60 @@ export default function DashboardScreen() {
         }
       >
         {/* Header */}
-        <View style={[styles.header, { marginBottom: spacing.lg }]}>
-          <View style={styles.headerLeft}>
-            <View
-              style={[
-                styles.avatar,
-                { backgroundColor: colors.accentSubtle },
-              ]}
-            >
-              <ShieldCheck size={18} color={colors.accent} />
-            </View>
-            <View>
-              <Text style={[styles.greeting, { color: colors.textMuted, fontSize: typography.xs }]}>
-                Welcome back
+{/* Header */}
+<View style={[styles.header, { marginBottom: spacing.lg }]}>
+  <View style={styles.headerLeft}>
+    <View style={[styles.avatar, { backgroundColor: colors.accentSubtle }]}>
+      <ShieldCheck size={18} color={colors.accent} />
+    </View>
+    <View>
+      <Text style={[styles.greeting, { color: colors.textMuted, fontSize: typography.xs }]}>
+        Welcome back
+      </Text>
+      <Text style={[styles.appName, { color: colors.text, fontSize: typography.md }]}>
+        {user?.name ?? 'Vault'}
               </Text>
-              <Text style={[styles.appName, { color: colors.text, fontSize: typography.md }]}>
-                {user?.name ?? 'Vault'}
-              </Text>
-            </View>
-          </View>
-          <View
-            style={[
-              styles.iconButton,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Bell size={18} color={colors.text} strokeWidth={1.8} />
-          </View>
-        </View>
+              
+    </View>
+  </View>
+
+  <View style={styles.headerRight}>
+    {/* <SyncBadge
+      status={syncStatus}
+      lastSynced={lastSynced}
+      onPress={sync}
+    /> */}
+    <TouchableOpacity
+      style={[
+        styles.iconButton,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+      onPress={handleExport}
+    >
+      <Download size={16} color={colors.text} strokeWidth={1.8} />
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.iconButton,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
+      <Bell size={18} color={colors.text} strokeWidth={1.8} />
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.iconButton,
+        {
+          backgroundColor: colors.expenseSubtle,
+          borderColor: colors.expense,
+        },
+      ]}
+      onPress={handleLogout}
+    >
+      <LogOut size={16} color={colors.expense} strokeWidth={1.8} />
+    </TouchableOpacity>
+  </View>
+</View>
 
         {/* Balance card */}
         <View style={{ marginBottom: spacing.lg }}>
@@ -107,6 +222,7 @@ export default function DashboardScreen() {
         <RecentActivity transactions={recentTransactions} isLoading={transactionsLoading} />
       </ScrollView>
     </View>
+    
   );
 }
 
@@ -136,4 +252,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerRight: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+},
 });

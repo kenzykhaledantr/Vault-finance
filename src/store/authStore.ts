@@ -1,19 +1,19 @@
 import { create } from 'zustand';
 import { tokenService } from '@features/auth/services/tokenService';
+import { authService } from '@features/auth/services/authService';
 
 type User = {
   id: string;
   email: string;
   name: string;
-  avatarUrl?: string;
+  avatarUrl?: string | undefined;
 };
 
 type AuthState = {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  // Actions
-  setUser: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
+  setUser: (user: User) => void;
   clearUser: () => Promise<void>;
   restoreSession: () => Promise<boolean>;
 };
@@ -23,37 +23,25 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
-  setUser: async (user, accessToken, refreshToken) => {
-    // Save to secure storage AND update in-memory state atomically
-    await Promise.all([
-      tokenService.saveTokens(accessToken, refreshToken),
-      tokenService.saveUser(user),
-    ]);
+  setUser: (user) => {
     set({ user, isAuthenticated: true, isLoading: false });
   },
 
   clearUser: async () => {
-    await tokenService.clearTokens();
+    try {
+      await authService.logout();       // Sign out from Supabase
+    } catch {
+      // Continue clearing local state even if Supabase call fails
+    }
+    await tokenService.clearTokens();   // Wipe SecureStore
     set({ user: null, isAuthenticated: false, isLoading: false });
   },
 
-  // Called on every app launch — checks if a valid session exists
   restoreSession: async () => {
     try {
-      const accessToken = await tokenService.getAccessToken();
-      if (!accessToken) {
-        set({ isLoading: false });
-        return false;
-      }
-      if (tokenService.isTokenExpired(accessToken)) {
-        // Token expired — try refresh (we'll implement API later)
-        // For now, clear session
-        await tokenService.clearTokens();
-        set({ isLoading: false });
-        return false;
-      }
-      // Token valid — restore user from secure storage
-      const user = await tokenService.getUser<User>();
+      // Supabase client handles token refresh automatically
+      // because we gave it the SecureStore adapter
+      const user = await authService.restoreSession();
       if (!user) {
         set({ isLoading: false });
         return false;

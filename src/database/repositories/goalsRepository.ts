@@ -27,15 +27,17 @@ function rowToGoal(row: {
 }
 
 export const goalsRepository = {
-  async getAll(): Promise<SavingsGoal[]> {
+  async getAll(userId: string): Promise<SavingsGoal[]> {
     const db = getDatabase();
     const rows = await db.getAllAsync<Parameters<typeof rowToGoal>[0]>(
-      `SELECT * FROM savings_goals ORDER BY created_at DESC`
+      `SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC`,
+      [userId]
     );
     return rows.map(rowToGoal);
   },
 
   async create(
+    userId: string,
     data: Pick<SavingsGoal, 'name' | 'targetAmount' | 'color'> & {
       targetDate?: string | undefined;
     }
@@ -46,32 +48,36 @@ export const goalsRepository = {
 
     await db.runAsync(
       `INSERT INTO savings_goals
-        (id, name, target_amount, saved_amount, target_date, color, created_at, updated_at)
-       VALUES (?, ?, ?, 0, ?, ?, ?, ?)`,
-      [id, data.name, data.targetAmount, data.targetDate ?? null, data.color, now, now]
+        (id, user_id, name, target_amount, saved_amount, target_date, color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      [id, userId, data.name, data.targetAmount, data.targetDate ?? null, data.color, now, now]
     );
 
     const created = await db.getFirstAsync<Parameters<typeof rowToGoal>[0]>(
-      `SELECT * FROM savings_goals WHERE id = ?`,
-      [id]
+      `SELECT * FROM savings_goals WHERE id = ?`, [id]
     );
     if (!created) throw new Error('Failed to create goal');
     return rowToGoal(created);
   },
 
-  async addFunds(id: string, amount: number): Promise<void> {
+  async addFunds(userId: string, id: string, amount: number): Promise<void> {
     const db = getDatabase();
+    // Verify ownership before updating
     await db.runAsync(
       `UPDATE savings_goals
        SET saved_amount = saved_amount + ?,
            updated_at = ?
-       WHERE id = ?`,
-      [amount, new Date().toISOString(), id]
+       WHERE id = ? AND user_id = ?`,
+      [amount, new Date().toISOString(), id, userId]
     );
   },
 
-  async delete(id: string): Promise<void> {
+ async delete(userId: string, id: string): Promise<void> {
     const db = getDatabase();
-    await db.runAsync(`DELETE FROM savings_goals WHERE id = ?`, [id]);
+    // user_id check prevents deleting another user's goal
+    await db.runAsync(
+      `DELETE FROM savings_goals WHERE id = ? AND user_id = ?`,
+      [id, userId]
+    );
   },
 };

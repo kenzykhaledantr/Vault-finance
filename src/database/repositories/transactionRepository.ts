@@ -38,6 +38,7 @@ const BASE_QUERY = `
 `;
 
 export type GetTransactionsOptions = {
+  userId: string; 
   limit?: number | undefined;
   offset?: number | undefined;
   type?: TransactionType | undefined;
@@ -48,9 +49,10 @@ export type GetTransactionsOptions = {
 };
 
 export const transactionRepository = {
-  async getAll(options: GetTransactionsOptions = {}): Promise<Transaction[]> {
+  async getAll(options: GetTransactionsOptions): Promise<Transaction[]> {
     const db = getDatabase();
     const {
+      userId,
       limit = 50,
       offset = 0,
       type,
@@ -60,8 +62,8 @@ export const transactionRepository = {
       searchQuery,
     } = options;
 
-    const conditions: string[] = [];
-    const params: (string | number)[] = [];
+     const conditions: string[] = ['t.user_id = ?'];
+    const params: (string | number)[] = [userId];
 
     if (type) {
       conditions.push('t.type = ?');
@@ -112,7 +114,10 @@ export const transactionRepository = {
   },
 
   async create(
-    data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'syncedAt' | 'category'>
+    data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'syncedAt' | 'category'> & {
+      userId: string;  
+    }
+    
   ): Promise<Transaction> {
     const db = getDatabase();
     const id = generateId();
@@ -120,9 +125,9 @@ export const transactionRepository = {
 
     await db.runAsync(
       `INSERT INTO transactions
-        (id, amount, type, category_id, note, date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, data.amount, data.type, data.categoryId, data.note, data.date, now, now]
+        (id, user_id, amount, type, category_id, note, date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, data.userId, data.amount, data.type, data.categoryId, data.note, data.date, now, now]
     );
 
     const created = await this.getById(id);
@@ -166,12 +171,11 @@ export const transactionRepository = {
   },
 
   // Aggregates — used by dashboard and insights screens
-  async getSummary(startDate: string, endDate: string): Promise<{
-    totalIncome: number;
-    totalExpenses: number;
-    balance: number;
-    transactionCount: number;
-  }> {
+  async getSummary(
+    userId: string,    // ← added
+    startDate: string,
+    endDate: string
+  ): Promise<{ totalIncome: number; totalExpenses: number; balance: number; transactionCount: number }> {
     const db = getDatabase();
     const row = await db.getFirstAsync<{
       total_income: number;
@@ -183,13 +187,12 @@ export const transactionRepository = {
         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS total_expenses,
         COUNT(*) AS transaction_count
        FROM transactions
-       WHERE date BETWEEN ? AND ?`,
-      [startDate, endDate]
+       WHERE user_id = ? AND date BETWEEN ? AND ?`,
+      [userId, startDate, endDate]
     );
 
     const totalIncome = row?.total_income ?? 0;
     const totalExpenses = row?.total_expenses ?? 0;
-
     return {
       totalIncome,
       totalExpenses,
@@ -199,6 +202,7 @@ export const transactionRepository = {
   },
 
   async getSpendingByCategory(
+    userId: string,    // ← added
     startDate: string,
     endDate: string
   ): Promise<Array<{ categoryId: string; name: string; color: string; icon: string; total: number }>> {
@@ -214,31 +218,31 @@ export const transactionRepository = {
        LEFT JOIN transactions t
          ON t.category_id = c.id
          AND t.type = 'expense'
+         AND t.user_id = ?
          AND t.date BETWEEN ? AND ?
        WHERE c.type = 'expense'
        GROUP BY c.id
        HAVING total > 0
        ORDER BY total DESC`,
-      [startDate, endDate]
+      [userId, startDate, endDate]
     );
   },
 
   // Returns daily totals for the sparkline chart on dashboard
   async getDailyTotals(
+    userId: string,    // ← added
     startDate: string,
     endDate: string,
     type: TransactionType
   ): Promise<Array<{ date: string; total: number }>> {
     const db = getDatabase();
     return db.getAllAsync(
-      `SELECT
-        date,
-        SUM(amount) AS total
+      `SELECT date, SUM(amount) AS total
        FROM transactions
-       WHERE type = ? AND date BETWEEN ? AND ?
+       WHERE user_id = ? AND type = ? AND date BETWEEN ? AND ?
        GROUP BY date
        ORDER BY date ASC`,
-      [type, startDate, endDate]
+      [userId, type, startDate, endDate]
     );
   },
 };

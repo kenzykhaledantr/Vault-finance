@@ -18,6 +18,7 @@ import { useTheme } from '@hooks/useTheme';
 import { goalsRepository } from '../../src/database/repositories/goalsRepository';
 import { formatCurrency, parseToCents, generateId } from '@utils/id';
 import type { SavingsGoal } from '../../src/types/index';
+import { useAuthStore } from '@store/authStore';
 
 const GOAL_COLORS = [
   '#22c55e', '#3b82f6', '#8b5cf6',
@@ -28,35 +29,41 @@ const goalKeys = {
   all: ['goals'] as const,
 };
 
+
 function useGoals() {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: goalKeys.all,
-    queryFn: () => goalsRepository.getAll(),
+    queryFn: () => goalsRepository.getAll(user?.id ?? ''),
+    enabled: Boolean(user?.id),
   });
 }
 
 function useCreateGoal() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   return useMutation({
-    mutationFn: (data: Parameters<typeof goalsRepository.create>[0]) =>
-      goalsRepository.create(data),
+    mutationFn: (data: Parameters<typeof goalsRepository.create>[1]) =>
+      goalsRepository.create(user?.id ?? '', data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: goalKeys.all }),
   });
 }
 
 function useAddFunds() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   return useMutation({
     mutationFn: ({ id, amount }: { id: string; amount: number }) =>
-      goalsRepository.addFunds(id, amount),
+      goalsRepository.addFunds(user?.id ?? '', id, amount),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: goalKeys.all }),
   });
 }
 
 function useDeleteGoal() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   return useMutation({
-    mutationFn: (id: string) => goalsRepository.delete(id),
+    mutationFn: (id: string) => goalsRepository.delete(user?.id ?? '', id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: goalKeys.all }),
   });
 }

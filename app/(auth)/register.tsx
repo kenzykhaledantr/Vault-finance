@@ -19,6 +19,7 @@ import { registerSchema, RegisterFormData } from '@features/auth/schemas/authSch
 import { useAuthStore } from '@store/authStore';
 import { FormInput } from '@components/ui/FormInput';
 import { useTheme } from '@hooks/useTheme';
+import { authService } from '@/features/auth/services/authService';
 
 export default function RegisterScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -29,27 +30,35 @@ export default function RegisterScreen() {
   const {
     control,
     handleSubmit,
+    
     formState: { errors },
+    setError,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
-    setIsLoading(true);
-    try {
-      // TODO (Milestone 5): Replace with Supabase signup
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  setIsLoading(true);
+  try {
+    const user = await authService.register(data.name, data.email, data.password);
+    setUser(user);
+    router.replace('/(tabs)');
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Registration failed. Please try again.';
 
-      const mockUser = { id: '1', email: data.email, name: data.name };
-      await setUser(mockUser, 'mock_access_token', 'mock_refresh_token');
-      router.replace('/(tabs)');
-    } catch {
-      // Handle error
-    } finally {
-      setIsLoading(false);
+    if (message.toLowerCase().includes('already registered')) {
+      setError('email', { message: 'An account with this email already exists.' });
+    } else if (message.toLowerCase().includes('password')) {
+      setError('password', { message });
+    } else {
+      setError('email', { message });
     }
-  };
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView
@@ -212,3 +221,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+
+
