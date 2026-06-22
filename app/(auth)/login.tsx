@@ -22,6 +22,7 @@ import { tokenService } from '@features/auth/services/tokenService';
 import { useAuthStore } from '@store/authStore';
 import { FormInput } from '@components/ui/FormInput';
 import { useTheme } from '@hooks/useTheme';
+import { authService } from '@/features/auth/services/authService';
 
 export default function LoginScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -46,32 +47,28 @@ export default function LoginScreen() {
   }, []);
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
-    try {
-      // TODO (Milestone 5): Replace with real Supabase/API call
-      // Simulating API call for now
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  setIsLoading(true);
+  try {
+    const user = await authService.login(data.email, data.password);
+    setUser(user);
+    router.replace('/(tabs)');
+  } catch (error) {
+    // Show the actual error — wrong password, unconfirmed email, etc.
+    const message =
+      error instanceof Error ? error.message : 'Login failed. Please try again.';
 
-      // Mock successful response
-      const mockUser = {
-        id: '1',
-        email: data.email,
-        name: 'Kenzy',
-      };
-      const mockAccessToken = 'mock_access_token';
-      const mockRefreshToken = 'mock_refresh_token';
-
-      await setUser(mockUser, mockAccessToken, mockRefreshToken);
-      router.replace('/(tabs)');
-    } catch {
-      // Never expose raw error messages to users — could leak server details
-      setError('password', {
-        message: 'Invalid email or password',
-      });
-    } finally {
-      setIsLoading(false);
+    // Map Supabase error messages to user-friendly versions
+    if (message.toLowerCase().includes('invalid login credentials')) {
+      setError('password', { message: 'Incorrect email or password.' });
+    } else if (message.toLowerCase().includes('email not confirmed')) {
+      setError('email', { message: 'Please confirm your email before logging in.' });
+    } else {
+      setError('password', { message });
     }
-  };
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleBiometric = async () => {
     const success = await biometricService.authenticate(
@@ -159,7 +156,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.forgotPassword}
-            onPress={() => {/* TODO: forgot password screen */}}
+            onPress={() => router.push('/(auth)/forgot-password')}
           >
             <Text style={[styles.forgotText, { color: colors.accent, fontSize: typography.sm }]}>
               Forgot password?

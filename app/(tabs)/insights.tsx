@@ -23,6 +23,7 @@ import { budgetKeys } from '@features/budgets/hooks/useBudgets';
 import { formatCurrency, parseToCents, toMonthString } from '@utils/id';
 import { getCurrentMonthRange } from '@utils/date';
 import type { Budget } from '../../src/types/index';
+import { useAuthStore } from '@/store/authStore';
 
 function getIconComponent(iconName: string) {
   const IconComponent = (Icons as unknown as Record<string, Icons.LucideIcon>)[iconName];
@@ -50,28 +51,31 @@ export default function InsightsScreen() {
     setLimitInput((budget.limitAmount / 100).toFixed(2));
   }, []);
 
-  const saveLimit = useCallback(async () => {
-    if (!editingBudget) return;
-    const cents = parseToCents(limitInput);
-    if (cents <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid budget amount.');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      await budgetRepository.upsert(
-        editingBudget.categoryId,
-        cents,
-        toMonthString()
-      );
-      await queryClient.invalidateQueries({ queryKey: budgetKeys.all });
-      setEditingBudget(null);
-    } catch {
-      Alert.alert('Error', 'Failed to save budget. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [editingBudget, limitInput, queryClient]);
+  const { user } = useAuthStore();
+
+const saveLimit = useCallback(async () => {
+  if (!editingBudget) return;
+  const cents = parseToCents(limitInput);
+  if (cents <= 0) {
+    Alert.alert('Invalid amount', 'Please enter a valid budget amount.');
+    return;
+  }
+  setIsSaving(true);
+  try {
+    await budgetRepository.upsert(
+      user?.id ?? '',      // ← pass userId
+      editingBudget.categoryId,
+      cents,
+      toMonthString()
+    );
+    await queryClient.invalidateQueries({ queryKey: budgetKeys.all() });
+    setEditingBudget(null);
+  } catch {
+    Alert.alert('Error', 'Failed to save budget. Please try again.');
+  } finally {
+    setIsSaving(false);
+  }
+}, [editingBudget, limitInput, queryClient, user]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

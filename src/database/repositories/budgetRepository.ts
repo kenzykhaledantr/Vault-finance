@@ -33,7 +33,10 @@ function rowToBudget(row: {
 }
 
 export const budgetRepository = {
-  async getByMonth(month: string = toMonthString()): Promise<Budget[]> {
+  async getByMonth(
+    userId: string,           // ← added
+    month: string = toMonthString()
+  ): Promise<Budget[]> {
     const db = getDatabase();
     const rows = await db.getAllAsync<Parameters<typeof rowToBudget>[0]>(
       `SELECT
@@ -46,17 +49,19 @@ export const budgetRepository = {
        JOIN categories c ON b.category_id = c.id
        LEFT JOIN transactions t
          ON t.category_id = b.category_id
+         AND t.user_id = b.user_id
          AND t.type = 'expense'
          AND strftime('%Y-%m', t.date) = b.month
        WHERE b.month = ?
        GROUP BY b.id
        ORDER BY spent_amount DESC`,
-      [month]
+      [userId, month]
     );
     return rows.map(rowToBudget);
   },
 
   async upsert(
+    userId: string,           // ← added
     categoryId: string,
     limitAmount: number,
     month: string = toMonthString()
@@ -64,13 +69,14 @@ export const budgetRepository = {
     const db = getDatabase();
     const id = generateId();
     await db.runAsync(
-      `INSERT INTO budgets (id, category_id, limit_amount, month)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(category_id, month)
+      `INSERT INTO budgets (id, user_id, category_id, limit_amount, month)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, category_id, month)
        DO UPDATE SET limit_amount = excluded.limit_amount`,
-      [id, categoryId, limitAmount, month]
+      [id, userId, categoryId, limitAmount, month]
     );
   },
+
 
   async delete(id: string): Promise<void> {
     const db = getDatabase();
